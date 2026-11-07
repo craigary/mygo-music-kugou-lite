@@ -1,0 +1,53 @@
+{
+  "id": "kugou-lite",
+  "name": "Kugou Lite",
+  "version": "0.4.0",
+  "minAppVersion": "0.1.20",
+  "main": "index.js",
+  "playback": "stream",
+  "permissions": {
+    "network": [
+      "gateway.kugou.com",
+      "login-user.kugou.com",
+      "login.user.kugou.com",
+      "loginserviceretry.kugou.com",
+      "userservice.kugou.com",
+      "kugouvip.kugou.com",
+      "openapi.kugou.com",
+      "lyrics.kugou.com"
+    ]
+  },
+  "settings": [
+    {
+      "key": "phone",
+      "label": "Phone number",
+      "help": "For signing in by SMS: fill in your phone number and a code is sent to it"
+    },
+    {
+      "key": "smsCode",
+      "label": "SMS code",
+      "help": "Fill in the code you received to sign in"
+    }
+  ],
+  "navigation": [
+    {
+      "builtin": "home"
+    },
+    {
+      "title": "Private FM",
+      "builtin": "stations"
+    },
+    {
+      "title": "Charts",
+      "page": "charts",
+      "icon": "chart"
+    },
+    {
+      "builtin": "liked"
+    },
+    {
+      "title": "Recently Played",
+      "page": "recent"
+    }
+  ]
+}
