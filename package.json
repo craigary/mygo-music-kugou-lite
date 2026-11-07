@@ -1,0 +1,8 @@
+{
+  "name": "mygo-music-kugou-lite",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
