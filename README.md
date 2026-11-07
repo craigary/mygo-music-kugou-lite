@@ -32,6 +32,6 @@ https://github.com/craigary/mygo-music-kugou-lite
 
 未登录只能播免费歌曲的试听片段，歌单和红心也需要登录。不支持评论回复、收藏专辑、播客和 MV。登录凭证以明文存在 MyGo 的插件数据目录里。
 
-非官方插件，用的是非公开接口，酷狗改了就可能失效。接口与签名参考 [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi)（MIT）；逐字歌词解压用 [tiny-inflate](https://github.com/foliojs/tiny-inflate)（MIT，已内联）。
+非官方插件，用的是非公开接口，酷狗改了就可能失效。接口与签名参考 [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi)（MIT），评论点赞的 mlike 接口参考 [SoundFieldLab/WaveForge](https://github.com/SoundFieldLab/WaveForge)（MIT）的实测；逐字歌词解压用 [tiny-inflate](https://github.com/foliojs/tiny-inflate)（MIT，已内联）。
 
 [MIT](LICENSE)
