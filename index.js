@@ -240,12 +240,14 @@ const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)
 
 let listsCache = null;
 let albumsCache = null; // the saved albums, gathered from every page of lists
+let profileChecked = false; // the listener's name is looked up once a launch
 const names = new Map();
 const commentPools = new Map(); // song id → comment pool id, for likes
 function resetSession() {
   state.epoch++;
   listsCache = null;
   albumsCache = null;
+  profileChecked = false;
   names.clear();
   commentPools.clear();
   for (const key of ["session", "profile", "vip", "vipInfo", "liked", "recent", "smsSent", "smsUsed"])
@@ -806,7 +808,14 @@ export async function account() {
     if (!s) return null;
   }
   startDaily();
-  const p = load("profile", null) || (await loadProfile().catch(() => null));
+  let p = load("profile", null);
+  // The listener can change their name on another device, so it is looked up
+  // again the first time this launch asks who they are; after that the stored
+  // copy answers, with nothing asked of Kugou.
+  if (!p || !profileChecked) {
+    profileChecked = true;
+    p = (await loadProfile().catch(() => null)) || p;
+  }
   return { id: String(s.userid), name: p?.name || String(s.userid), imageUrl: p?.imageUrl, page: "profile" };
 }
 
