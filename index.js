@@ -239,11 +239,13 @@ const session = () => load("session", null);
 const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 
 let listsCache = null;
+let albumsCache = null; // the saved albums, gathered from every page of lists
 const names = new Map();
 const commentPools = new Map(); // song id → comment pool id, for likes
 function resetSession() {
   state.epoch++;
   listsCache = null;
+  albumsCache = null;
   names.clear();
   commentPools.clear();
   for (const key of ["session", "profile", "vip", "vipInfo", "liked", "recent", "smsSent", "smsUsed"])
@@ -258,7 +260,7 @@ function needSession() {
   if (!s) throw fail("signIn", tr("Sign in to Kugou first"));
   return s;
 }
-const forgetLists = () => { listsCache = null; };
+const forgetLists = () => { listsCache = null; albumsCache = null; };
 
 function device() {
   let d = load("device", null);
@@ -1360,18 +1362,20 @@ function isMine(p, me) {
   return !!ownList(p.global_collection_id || String(p.listid || ""), me);
 }
 
-async function myLists(fresh = false) {
+// The library answers a page of lists at a time, albums among the playlists.
+async function listPage(page, fresh = false) {
+  if (page === 1 && !fresh && listsCache && Date.now() - listsCache.at < 30e3) return listsCache.lists;
   const s = needSession();
-  if (!fresh && listsCache && Date.now() - listsCache.at < 30e3) return listsCache.lists;
   const r = await request({
     method: "POST", path: "/v7/get_all_list", headers: { "x-router": "cloudlist.service.kugou.com" },
     params: { plat: 1, userid: s.userid, token: s.token },
-    data: { userid: s.userid, token: s.token, total_ver: 979, type: 2, page: 1, pagesize: 100 },
+    data: { userid: s.userid, token: s.token, total_ver: 979, type: 2, page, pagesize: PAGE },
   });
   const lists = must(r, tr("Your playlists")).data?.info || [];
-  listsCache = { at: Date.now(), lists };
+  if (page === 1) listsCache = { at: Date.now(), lists };
   return lists;
 }
+const myLists = (fresh = false) => listPage(1, fresh);
 
 // A list's own id says whose it is and which one: collection_3_<user>_<list>_0.
 function ownList(id, me) {
@@ -1647,8 +1651,19 @@ export async function savePlaylist({ id, on }) {
   forgetLists();
 }
 
-async function albumRows() {
-  return (await myLists()).filter(isAlbumRow);
+// Albums sit among the playlists, a page of the library at a time, so the whole
+// set is gathered before it is paged: a hundred saved albums can be spread over
+// several pages of lists, and the offset the app asks for counts albums.
+async function albumRows(fresh = false) {
+  if (!fresh && albumsCache && Date.now() - albumsCache.at < 60e3) return albumsCache.rows;
+  const rows = [];
+  for (let page = 1; page <= 20; page++) {
+    const lists = await listPage(page, fresh && page === 1);
+    rows.push(...lists.filter(isAlbumRow));
+    if (lists.length < PAGE) break;
+  }
+  albumsCache = { at: Date.now(), rows };
+  return rows;
 }
 
 async function albumSaved(id) {
@@ -1659,7 +1674,6 @@ async function albumSaved(id) {
 export async function savedAlbums({ offset = 0 } = {}) {
   needSession();
   offsetOf(offset);
-  // The library comes as one list of lists, albums among the playlists.
   const rows = (await albumRows()).map(toSavedAlbum);
   return {
     albums: rows.slice(offset, offset + PAGE),
@@ -1674,7 +1688,7 @@ export async function saveAlbum({ id, on }) {
   const me = needSession();
   const albumId = String(id ?? "").trim();
   if (!albumId) throw fail("unavailable", tr("Album not found"));
-  const found = (await myLists(true).catch(() => [])).filter(isAlbumRow).find((p) => albumRowID(p) === albumId);
+  const found = (await albumRows(true).catch(() => [])).find((p) => albumRowID(p) === albumId);
   if (on) {
     if (found) return;
     const a = await albumDetail(albumId);
@@ -1696,11 +1710,14 @@ export async function saveAlbum({ id, on }) {
     const info = r?.data?.info;
     if (info && listsCache)
       listsCache.lists = [...listsCache.lists.filter((p) => String(p.listid) !== String(info.listid)), info];
+    if (info && albumsCache)
+      albumsCache.rows = [...albumsCache.rows.filter((p) => String(p.listid) !== String(info.listid)), info];
   } else {
     if (!found) return;
     const r = await cloudLegacy("/v2/delete_list", { listid: Number(found.listid), total_ver: 0, type: 1 });
     must(r, tr("Removing the saved album"));
     if (listsCache) listsCache.lists = listsCache.lists.filter((p) => String(p.listid) !== String(found.listid));
+    if (albumsCache) albumsCache.rows = albumsCache.rows.filter((p) => String(p.listid) !== String(found.listid));
   }
 }
 
