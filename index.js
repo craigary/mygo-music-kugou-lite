@@ -9,7 +9,10 @@ const SALT = "LnT6xpN3khm36zse0QzvmgTZ3waWdRSA"; // lite android signature salt
 const WEB_SALT = "NVPh5oo715z5DIWAeQlhMDsWXXQV4hwt";
 const KEY_SALT = "185672dd44712f60bb1736df5a377e82"; // lite song url key salt
 const GATEWAY = "https://gateway.kugou.com";
+const LIKES = "https://mlike.kugou.com"; // comment likes answer here, not on the gateway
+const LIKE_SALT = "949ad1dac503e48ad6e86bb841383485"; // the salt the comment page signs its likes with
 const UA = "Android15-1070-11083-46-0-DiscoveryDRADProtocol-wifi";
+const WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const PAGE = 100;
 const SEARCH_PAGE = 30;
 // lite RSA public key (1024 bit)
@@ -237,10 +240,12 @@ const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)
 
 let listsCache = null;
 const names = new Map();
+const commentPools = new Map(); // song id → comment pool id, for likes
 function resetSession() {
   state.epoch++;
   listsCache = null;
   names.clear();
+  commentPools.clear();
   for (const key of ["session", "profile", "vip", "vipInfo", "liked", "recent", "smsSent", "smsUsed"])
     host.storage.remove(key);
 }
@@ -1104,7 +1109,51 @@ function toComment(c = {}) {
     text,
     time: c.addtime ? Date.parse(`${String(c.addtime).replace(" ", "T")}+08:00`) || undefined : undefined,
     likes: Number(c.like?.count || c.like_count || 0) || undefined,
+    liked: !!Number(c.like?.haslike),
   };
+}
+
+// A like is addressed to the song's comment pool, which only the list knows.
+async function commentPool(mix) {
+  const hit = commentPools.get(mix);
+  if (hit && Date.now() - hit.at < 10 * 60e3) return hit.id;
+  const r = await commentList(mix, 1, 1);
+  const id = String(r?.childrenid || r?.data?.childrenid || "");
+  if (id) commentPools.set(mix, { id, at: Date.now() });
+  return id;
+}
+
+// Kugou's like call is a toggle with no "off" form, so it is asked for the
+// state the page wants and, if a stale page or a double tap left it on the
+// wrong side, flipped once more.
+export async function likeComment({ trackId, commentId, on }) {
+  const me = needSession();
+  const { mix } = parseId(trackId);
+  const id = String(commentId ?? "").trim();
+  if (!id) throw new Error(tr("The comment is missing"));
+  const pool = await commentPool(mix);
+  if (!pool) throw new Error(tr("Kugou did not return this song's comments"));
+  const d = device();
+  const flip = async () => {
+    const clienttime = String(Math.floor(Date.now() / 1000));
+    const params = {
+      childrenid: pool, object: id, assign: md5(`${COMMENT_CODE}${clienttime}${LIKE_SALT}`),
+      kugouid: me.userid, appid: APPID, clienttoken: me.token, mid: d.mid,
+      timestamp: clienttime, modulecode: COMMENT_CODE, format: "jsonp", from: "phone",
+    };
+    const res = await send(`${LIKES}/like/handlelike?${asQuery(params)}`, {
+      headers: { "User-Agent": WEB_UA, Referer: "https://www.kugou.com/" },
+    });
+    let r = null;
+    try { r = JSON.parse(await res.text()); } catch { throw new Error(tr("Kugou did not accept the like")); }
+    if (Number(r?.status) !== 1 || Number(r?.err_code) !== 0)
+      throw new Error(String(r?.msg || r?.message || tr("Kugou did not accept the like")));
+    return Number(r.islike) === 1;
+  };
+  const want = !!on;
+  let liked = await flip();
+  if (liked !== want) liked = await flip();
+  if (liked !== want) throw new Error(tr("Kugou left the like unchanged"));
 }
 
 // Writing takes the track's comment pool id, which the list answers with; a

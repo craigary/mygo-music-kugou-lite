@@ -90,6 +90,10 @@
   "The comment is empty": "评论不能为空",
   "Keep the comment under 500 characters": "评论请控制在 500 字以内",
   "Posting the comment": "发表评论",
+  "The comment is missing": "评论不存在",
+  "Kugou did not return this song's comments": "酷狗没有返回这首歌的评论",
+  "Kugou did not accept the like": "酷狗没有接受这次点赞",
+  "Kugou left the like unchanged": "酷狗没有改变点赞状态",
   "Following the artist": "关注歌手",
   "Unfollowing the artist": "取消关注歌手"
 }
