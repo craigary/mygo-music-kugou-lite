@@ -692,6 +692,10 @@ function toTrack(s) {
   }
   const durRaw = s.timelen || s.timelength || s.time_length || ai.duration || ai.duration_128 || (s.Duration || s.duration || 0) * 1000;
   const duration = durRaw > 0 && durRaw < 20000 ? durRaw * 1000 : durRaw;
+  // Every list Kugou answers with carries the rights of each song, so a song
+  // it cannot serve is known before anyone taps it. 5 means the rights have
+  // gone; 0, 8 and 10 are free, upload and VIP, all of them playable.
+  const privilege = Number(s.Privilege ?? s.privilege ?? s.copyright?.privilege ?? NaN);
   const id = trackId(hash, mix, albumId);
   if (names.size > 5000) names.clear();
   names.set(id, `${artists.map((a) => a.name).join("、")} - ${name}`);
@@ -706,6 +710,7 @@ function toTrack(s) {
     },
     duration: Math.round(Number(duration) || 0),
     url: `https://www.kugou.com/song/#hash=${String(hash).toLowerCase()}&album_id=${albumId || 0}`,
+    ...(privilege === 5 ? { unavailable: true } : {}),
   };
 }
 const tracksOf = (list) => (list || []).map(toTrack).filter(Boolean);
