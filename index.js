@@ -713,6 +713,24 @@ function toAlbum(a = {}) {
     imageUrl: picture(a.imageUrl || a.sizable_cover || a.img || a.cover),
     artists: a.artists || splitArtists(a.author_name || a.singer),
     released: a.released || a.publish_date || "",
+    ...(a.saved === undefined ? {} : { saved: !!a.saved }),
+  };
+}
+
+// A saved album is one more entry in the same list of lists, marked source 2,
+// where the album's own id stands for the list it was made from.
+const isAlbumRow = (p) => Number(p?.source) === 2;
+const albumRowID = (p) => String(p?.musiclib_id || p?.list_create_listid || "");
+function toSavedAlbum(p = {}) {
+  return {
+    id: albumRowID(p),
+    name: p.name || "",
+    imageUrl: picture(p.pic),
+    artists: p.list_create_username
+      ? [{ id: String(p.list_create_userid || ""), name: p.list_create_username }]
+      : [],
+    released: "",
+    saved: true,
   };
 }
 
@@ -1198,19 +1216,21 @@ export async function postComment({ trackId, text }) {
   };
 }
 
+async function albumDetail(id) {
+  const r = await request({
+    method: "POST", path: "/kmr/v2/albums", headers: { "x-router": "openapi.kugou.com", "kg-tid": "255" },
+    data: { data: [{ album_id: id }], is_buy: 0, fields: "album_id,album_name,publish_date,sizable_cover,intro,language,is_publish,heat,type,quality,authors,exclusive,author_name,trans_param" },
+  });
+  return (r?.data || [])[0] || {};
+}
+
 export async function album({ id }) {
-  const [detail, songs] = await Promise.all([
-    request({
-      method: "POST", path: "/kmr/v2/albums", headers: { "x-router": "openapi.kugou.com", "kg-tid": "255" },
-      data: { data: [{ album_id: id }], is_buy: 0, fields: "album_id,album_name,publish_date,sizable_cover,intro,language,is_publish,heat,type,quality,authors,exclusive,author_name,trans_param" },
-    }),
-    albumSongs(id),
-  ]);
-  const a = detail?.data?.[0] || {};
+  const [a, songs] = await Promise.all([albumDetail(id), albumSongs(id)]);
   return {
     album: toAlbum({
       id, name: a.album_name, imageUrl: a.sizable_cover, released: a.publish_date,
       artists: (a.authors || []).map(toArtist), singer: a.author_name,
+      saved: session() ? await albumSaved(id).catch(() => false) : undefined,
     }),
     tracks: tracksOf(songs),
   };
@@ -1400,7 +1420,7 @@ async function listTracks(gid, max = 3000) {
 
 export async function playlists() {
   const me = needSession();
-  return (await myLists()).map((p) => toPlaylist(p, me));
+  return (await myLists()).filter((p) => !isAlbumRow(p)).map((p) => toPlaylist(p, me));
 }
 
 export async function playlist({ id }) {
@@ -1625,6 +1645,63 @@ export async function savePlaylist({ id, on }) {
     must(r, tr("Removing the saved playlist"));
   }
   forgetLists();
+}
+
+async function albumRows() {
+  return (await myLists()).filter(isAlbumRow);
+}
+
+async function albumSaved(id) {
+  const wanted = String(id);
+  return (await albumRows()).some((p) => albumRowID(p) === wanted);
+}
+
+export async function savedAlbums({ offset = 0 } = {}) {
+  needSession();
+  offsetOf(offset);
+  // The library comes as one list of lists, albums among the playlists.
+  const rows = (await albumRows()).map(toSavedAlbum);
+  return {
+    albums: rows.slice(offset, offset + PAGE),
+    more: offset + PAGE < rows.length,
+  };
+}
+
+// Saving an album is saving a list whose source says it is an album: the
+// artist is the list's creator and the album its list id. Removing it is
+// removing that list.
+export async function saveAlbum({ id, on }) {
+  const me = needSession();
+  const albumId = String(id ?? "").trim();
+  if (!albumId) throw fail("unavailable", tr("Album not found"));
+  const found = (await myLists(true).catch(() => [])).filter(isAlbumRow).find((p) => albumRowID(p) === albumId);
+  if (on) {
+    if (found) return;
+    const a = await albumDetail(albumId);
+    const name = a.album_name || "";
+    if (!name) throw fail("unavailable", tr("Album not found"));
+    const singer = (a.authors || [])[0] || {};
+    const r = await request({
+      method: "POST", path: "/cloudlist.service/v5/add_list",
+      params: { last_time: Math.floor(Date.now() / 1000), last_area: "gztx", userid: me.userid, token: me.token },
+      data: {
+        userid: me.userid, token: me.token, total_ver: 0, name, type: 1, source: 2, is_pri: 0,
+        list_create_userid: Number(singer.author_id || 0), list_create_listid: Number(albumId),
+        list_create_gid: "", from_shupinmv: 0,
+      },
+    });
+    must(r, tr("Saving the album"));
+    // The list service answers with the new entry, which the page reads before
+    // the list of lists catches up.
+    const info = r?.data?.info;
+    if (info && listsCache)
+      listsCache.lists = [...listsCache.lists.filter((p) => String(p.listid) !== String(info.listid)), info];
+  } else {
+    if (!found) return;
+    const r = await cloudLegacy("/v2/delete_list", { listid: Number(found.listid), total_ver: 0, type: 1 });
+    must(r, tr("Removing the saved album"));
+    if (listsCache) listsCache.lists = listsCache.lists.filter((p) => String(p.listid) !== String(found.listid));
+  }
 }
 
 export async function addToPlaylist({ id, trackIds }) {

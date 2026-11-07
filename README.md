@@ -18,6 +18,7 @@ https://github.com/craigary/mygo-music-kugou-lite
 - **浏览**：首页有每日推荐、推荐歌单、酷狗 TOP500、新歌和排行榜；搜索覆盖歌曲、专辑、歌手、歌单。
 - **排行榜**：按歌单页展示，一次给全 500 首，不是一页 100 首往下翻。
 - **歌手**：热门歌曲加全部专辑，可以关注 / 取消关注。
+- **专辑**：专辑页可以收藏、取消收藏，收藏的都收在「收藏的专辑」里。
 - **播放**：音质按无损 → 320 → 128 自动降档，账号能播到哪一档就给哪一档。
 - **歌词**：优先逐字歌词（带翻译），没有再退回整行歌词。
 - **评论**：歌曲评论可翻页，登录后可以发表、点赞和取消点赞。
@@ -30,7 +31,7 @@ https://github.com/craigary/mygo-music-kugou-lite
 
 ## 说明
 
-未登录只能播免费歌曲的试听片段，歌单和红心也需要登录。不支持评论回复、收藏专辑、播客和 MV。登录凭证以明文存在 MyGo 的插件数据目录里。
+未登录只能播免费歌曲的试听片段，歌单和红心也需要登录。不支持评论回复、播客和 MV。登录凭证以明文存在 MyGo 的插件数据目录里。
 
 非官方插件，用的是非公开接口，酷狗改了就可能失效。接口与签名参考 [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi)（MIT），评论点赞的 mlike 接口参考 [SoundFieldLab/WaveForge](https://github.com/SoundFieldLab/WaveForge)（MIT）的实测；逐字歌词解压用 [tiny-inflate](https://github.com/foliojs/tiny-inflate)（MIT，已内联）。
 
