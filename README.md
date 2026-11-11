@@ -8,7 +8,7 @@
 
 也可以下载这个仓库，在 **设置 → 插件 → +** 里选文件夹或 zip 导入，或者直接填仓库地址 `craigary/mygo-music-kugou-lite`。
 
-需要 MyGo Music **0.1.24** 或更新（见 [`plugin.json`](plugin.json) 的 `minAppVersion`）。
+需要 MyGo Music **0.1.24** 或更新的版本。
 
 ## 功能
 
