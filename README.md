@@ -4,13 +4,17 @@
 
 ## 安装
 
-[在 MyGo Music 里安装](mygo-music://install-plugin?repo=craigary/mygo-music-kugou-lite)，或在 **设置 → 插件 → +** 里填仓库地址：
+### [**点此安装**](mygo-music://install-plugin?repo=craigary/mygo-music-kugou-lite)
+
+点上面这行会直接打开 MyGo Music，问过你之后再下载安装。
+
+也可以在 **设置 → 插件 → +** 里填仓库地址：
 
 ```text
 https://github.com/craigary/mygo-music-kugou-lite
 ```
 
-也可以直接选这个文件夹，或用它的 zip。需要 MyGo Music **0.1.24** 或更新（见 [`plugin.json`](plugin.json) 的 `minAppVersion`）。
+或者直接选这个文件夹，或用它的 zip。需要 MyGo Music **0.1.24** 或更新（见 [`plugin.json`](plugin.json) 的 `minAppVersion`）。
 
 ## 功能
 
