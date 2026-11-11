@@ -1018,7 +1018,7 @@ function vipSummary(info) {
   return [
     live ? vipKind(info.kind) || tr("VIP") : tr("Not VIP"),
     st.done ? tr("Checked in") : st.error ? tr("Check-in failed") : tr("Not checked in"),
-    live ? tr("{date} expires", { date: info.end }) : "",
+    live ? tr("{date} expires", { date: String(info.end).split(" ")[0] }) : "",
   ].filter(Boolean).join(" · ");
 }
 
