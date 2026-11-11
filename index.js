@@ -587,15 +587,23 @@ function vipState() {
   return st && st.date === today() ? st : { date: today(), done: false };
 }
 
-async function claimDaily() {
-  if (dailyRunning || !session()) return;
-  if (String(host.setting("claimVip") || "") !== "true") return;
+async function claimDaily({ manual = false } = {}) {
+  if (!session()) return null;
+  // The switch only governs the automatic claim: asking for it by hand is
+  // reason enough on its own.
+  if (!manual && String(host.setting("claimVip") || "") !== "true") return null;
+  if (dailyRunning) {
+    if (!manual) return null;
+    for (let i = 0; i < 40 && dailyRunning; i++) await sleep(150);
+    return vipState();
+  }
   dailyRunning = true;
   try {
     const s = session();
+    // A record for today, for this account: tapping again needn't ask again.
     let st = vipState();
-    if (st.done) return;
-    if (st.triedAt && Date.now() - st.triedAt < RETRY_AFTER) return;
+    if (st.done) return st;
+    if (!manual && st.triedAt && Date.now() - st.triedAt < RETRY_AFTER) return st;
     if (Date.now() - (s.refreshed || 0) > 7 * 86400e3) await refreshToken().catch(() => {});
     await ensureDfid().catch(() => {});
     const r = await request({
@@ -611,12 +619,16 @@ async function claimDaily() {
     st.done = st.note === "claimed" || st.note === "already";
     save("vip", st);
     if (st.done) {
-      await request({
-        method: "POST", path: "/youth/v1/listen_song/upgrade_vip_reward",
-        params: { kugouid: Number(s.userid), ad_type: 1 },
-      }).catch(() => {});
+      // The ad's extra only comes with a claim made just now.
+      if (st.note === "claimed") {
+        await request({
+          method: "POST", path: "/youth/v1/listen_song/upgrade_vip_reward",
+          params: { kugouid: Number(s.userid), ad_type: 1 },
+        }).catch(() => {});
+      }
       await vipInfo().catch(() => {});
     }
+    return st;
   } finally {
     dailyRunning = false;
   }
@@ -1037,6 +1049,16 @@ async function myPage() {
   still(generation);
   const profile = info.status === "fulfilled" ? info.value : null;
   const sections = [];
+  // Claiming by hand, for when the switch that does it on launch is off.
+  const vipToday = vipState();
+  const claimed = vipToday.note === "claimed" || vipToday.note === "already";
+  sections.push({
+    links: [{
+      title: claimed ? tr("Today's VIP is claimed") : tr("Check in for today's VIP"),
+      subtitle: tr("One day of VIP, once a day"),
+      page: "vip",
+    }],
+  });
   if (lists.status === "fulfilled") {
     sections.push({
       title: tr("My Playlists"),
@@ -1094,6 +1116,23 @@ export async function browse({ page }) {
     };
   }
   if (name === "profile") return myPage();
+  if (name === "vip") {
+    needSession();
+    const st = await claimDaily({ manual: true });
+    const info = await vipInfo().catch(() => null);
+    const result = !st
+      ? tr("Sign in to claim the daily VIP")
+      : st.note === "claimed"
+        ? tr("Today's VIP claimed")
+        : st.note === "already"
+          ? tr("Today's VIP was already claimed")
+          : tr("Claiming today's VIP failed: {message}", { message: st.error || "" });
+    return {
+      title: tr("Daily VIP"),
+      description: [result, info?.end ? tr("VIP until {date}", { date: info.end }) : ""].filter(Boolean).join("\n"),
+      sections: [{ links: [{ title: tr("My Page"), page: "profile" }] }],
+    };
+  }
   if (name === "recent") {
     return {
       title: tr("Recently Played"),
