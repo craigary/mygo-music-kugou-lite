@@ -33,7 +33,8 @@ https://github.com/craigary/mygo-music-kugou-lite
 
 - 首次使用时会向酷狗注册一个设备（和概念版 App 一样），之后才能取到播放地址。注册信息只存在插件自己的数据里。
 - 能不能播、能播什么音质取决于账号：未登录只能播免费歌曲，VIP 歌曲需要登录并领取 VIP。
-- 不支持评论回复、播客和 MV。
+- 评论可以发表、点赞，但不能回复。
+- 不支持播客和 MV。
 - 登录凭证以明文存在 MyGo 的插件数据目录里（用密码登录的话，密码也会留在设置里）。
 
 非官方插件，用的是非公开接口，酷狗改了就可能失效。接口与签名参考 [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi)（MIT），评论点赞的 mlike 接口参考 [SoundFieldLab/WaveForge](https://github.com/SoundFieldLab/WaveForge)（MIT）的实测；逐字歌词解压用 [tiny-inflate](https://github.com/foliojs/tiny-inflate)（MIT，已内联）。

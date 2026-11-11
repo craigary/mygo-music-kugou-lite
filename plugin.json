@@ -53,7 +53,7 @@
       "key": "password",
       "label": "Password",
       "type": "password",
-      "help": "Only for Phone + password. It is kept as plain text in this plugin's data: delete it once you are signed in"
+      "help": "Only for Phone + password. It is kept as plain text in this plugin's data"
     },
     {
       "key": "claimVip",
