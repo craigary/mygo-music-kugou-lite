@@ -636,7 +636,13 @@ async function vipInfo() {
     .map((b) => String(b.vip_end_time || ""))
     .filter(Boolean)
     .sort();
-  const info = { end: ends[ends.length - 1] || "", checked: Date.now() };
+  const busi = (r.data?.busi_vip || []).filter((b) => Number(b.is_vip) === 1);
+  const info = {
+    end: ends[ends.length - 1] || "",
+    // concept is the Concept Edition's own VIP; music is the listening pack.
+    kind: String(busi[0]?.busi_type || ""),
+    checked: Date.now(),
+  };
   save("vipInfo", info);
   return info;
 }
@@ -974,6 +980,13 @@ async function recommendedPlaylists(pagesize = 30) {
   }));
 }
 
+// Kugou groups VIPs by busi type: the Concept one, and the music pack.
+function vipKind(type) {
+  if (type === "concept") return tr("Concept VIP");
+  if (type === "music") return tr("Music pack");
+  return String(type || "");
+}
+
 function vipLine() {
   const st = load("vip", null);
   const info = load("vipInfo", null);
@@ -1058,6 +1071,10 @@ async function myPage() {
   } else {
     sections.push(retrySection(tr("My Playlists"), "profile", lists.reason));
   }
+  if (lists.status === "fulfilled") {
+    const albums = lists.value.filter(isAlbumRow).slice(0, 10).map(toSavedAlbum);
+    if (albums.length) sections.push({ title: tr("Saved Albums"), albums, morePage: "albums" });
+  }
   if (recentTracks.status === "fulfilled" && recentTracks.value.length) {
     sections.push({ title: tr("Recently Played"), tracks: recentTracks.value, morePage: "recent" });
   }
@@ -1065,7 +1082,7 @@ async function myPage() {
   // Kugou's is_vip is about its paid tiers; what the listener has is the date.
   const endAt = vip?.end ? Date.parse(String(vip.end).replace(" ", "T") + "+08:00") : 0;
   const stats = [
-    endAt > Date.now() ? tr("VIP") : tr("Not VIP"),
+    endAt > Date.now() ? vipKind(vip?.kind) || tr("VIP") : tr("Not VIP"),
     vip?.end ? tr("VIP until {date}", { date: vip.end }) : "",
     profile?.follows ? tr("{count} following", { count: profile.follows }) : "",
     profile?.fans ? tr("{count} followers", { count: profile.fans }) : "",
@@ -1109,6 +1126,13 @@ export async function browse({ page }) {
     };
   }
   if (name === "profile") return myPage();
+  if (name === "albums") {
+    needSession();
+    return {
+      title: tr("Saved Albums"),
+      sections: [{ albums: (await albumRows()).map(toSavedAlbum), empty: tr("No saved albums yet") }],
+    };
+  }
   if (name === "recent") {
     return {
       title: tr("Recently Played"),

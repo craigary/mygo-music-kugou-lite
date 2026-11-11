@@ -114,5 +114,8 @@
   "Only for Phone + password. It is kept as plain text in this plugin's data": "只用于「手机号 + 密码」。会以明文存在插件数据里。",
   "Today's VIP is claimed": "今天的 VIP 已领取",
   "Not VIP": "非 VIP",
-  "Today's VIP is not claimed yet": "今日尚未签到"
+  "Today's VIP is not claimed yet": "今日尚未签到",
+  "Concept VIP": "概念版 VIP",
+  "Music pack": "音乐包",
+  "No saved albums yet": "还没有收藏的专辑"
 }
