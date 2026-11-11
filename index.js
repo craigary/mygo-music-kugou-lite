@@ -997,6 +997,7 @@ export async function home() {
         pageTitle: tr("Daily picks"),
         subtitle: vipLine(),
         tracks: daily.value,
+        morePage: "daily",
       });
     } else if (daily.status === "rejected") {
       sections.push(retrySection(tr("Daily picks"), "daily", daily.reason));
@@ -1905,11 +1906,21 @@ export async function played({ id }) {
 
 // --------------------------------------------------------------- audio ----
 
+// "high" is Kugou's Hi-Res (24-bit FLAC), not the 320k one: the app's highest
+// level asks for it first and takes plain FLAC next.
 const LADDER = {
   lossless: ["high", "flac", "320", "128"],
   high: ["320", "128"],
   standard: ["128"],
 };
+const PLAYABLE = new Set(["mp3", "flac", "ogg"]); // what the app can play
+
+function extOf(found) {
+  const named = String(found?.extName || found?.ext || "").toLowerCase().replace(/^\./, "");
+  if (named) return named;
+  const m = /\.([a-z0-9]+)(?:\?|$)/i.exec(String(found?.url || ""));
+  return m ? m[1].toLowerCase() : "";
+}
 
 async function songUrl(hash, mix, albumId, quality, freePart = false) {
   const r = await request({
@@ -1929,8 +1940,16 @@ export async function stream({ id, quality = "high" }) {
   await ensureDfid();
   let found = null;
   for (const q of LADDER[quality] || LADDER.high) {
-    found = await songUrl(hash, mix, album, q).catch(() => null);
-    if (found) break;
+    const got = await songUrl(hash, mix, album, q).catch(() => null);
+    if (!got) continue;
+    const ext = extOf(got);
+    if (ext && !PLAYABLE.has(ext)) continue;
+    // When no Hi-Res is on offer Kugou still answers the "high" step, with a
+    // 128k mp3. Stopping there would hand back a worse file than the FLAC the
+    // next step usually has, so skip it and let "flac" try.
+    if (q === "high" && ext !== "flac") continue;
+    found = got;
+    break;
   }
   // Without VIP, a preview is what Kugou gives, if anything.
   if (!found) found = await songUrl(hash, mix, album, "128", true).catch(() => null);
@@ -1938,8 +1957,8 @@ export async function stream({ id, quality = "high" }) {
   // Kugou's file CDN answers on http only: its hosts have no certificate, so
   // asking for https fails before a byte is read.
   const url = String(found.url);
-  const flac = /flac/i.test(found.extName || "") || /\.flac(\?|$)/i.test(url);
-  const type = flac ? "flac" : "mp3";
+  const type = extOf(found) === "flac" ? "flac" : "mp3";
+  const flac = type === "flac";
   const kbps = found.bitRate ? Math.round(found.bitRate / (found.bitRate > 10000 ? 1000 : 1)) : 0;
   return {
     url,

@@ -26,12 +26,15 @@ https://github.com/craigary/mygo-music-kugou-lite
 - **歌单**：新建、改名、删除、加歌、移歌、调序；可以收藏别人的歌单，也可以取消收藏。
 - **电台**：私人 FM 和小众 FM。
 - **最近播放**：本地记录加酷狗听歌历史，播放时同步上报，手机 App 里能看到同一条。
-- **每日 VIP**：设置里打开「领取每日免费 VIP」后，每次打开 MyGo 自动领当天那份，结果显示在首页副标题。默认关闭；不领的话 VIP 歌曲只能听 60 秒。
+- **每日 VIP**：在设置里开启「领取每日免费 VIP」后，插件每天首次启动时领取当天的免费 VIP。
 - **语言**：跟随 MyGo Music 的简体中文 / English 设置。
 
 ## 说明
 
-未登录只能播免费歌曲的试听片段，歌单和红心也需要登录。不支持评论回复、播客和 MV。登录凭证以明文存在 MyGo 的插件数据目录里；用密码登录的话，密码也会明文留在设置里，登录后建议清空。
+- 首次使用时会向酷狗注册一个设备（和概念版 App 一样），之后才能取到播放地址。注册信息只存在插件自己的数据里。
+- 能不能播、能播什么音质取决于账号：未登录只能播免费歌曲，VIP 歌曲需要登录并领取 VIP。
+- 不支持评论回复、播客和 MV。
+- 登录凭证以明文存在 MyGo 的插件数据目录里（用密码登录的话，密码也会留在设置里）。
 
 非官方插件，用的是非公开接口，酷狗改了就可能失效。接口与签名参考 [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi)（MIT），评论点赞的 mlike 接口参考 [SoundFieldLab/WaveForge](https://github.com/SoundFieldLab/WaveForge)（MIT）的实测；逐字歌词解压用 [tiny-inflate](https://github.com/foliojs/tiny-inflate)（MIT，已内联）。
 
