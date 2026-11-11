@@ -795,37 +795,20 @@ function toPlaylist(p = {}, me, cover) {
 }
 
 // A list we made ourselves has no cover of its own — Kugou leaves pic empty and
-// its own clients draw the newest song's artwork instead. "Newest" is not a
-// position: the list answers in the order the listener arranged it, and every
-// sort parameter we tried (need_sort, sort, sort_type, order) is ignored. What
-// each row does carry is collecttime, the moment it was added, so the newest
-// song is found by reading the list — one page for most of them, since a page
-// holds 300.
-function newestArtwork(songs = []) {
-  const rows = songs.filter(Boolean);
-  const dated = rows.filter((s) => Number(s.collecttime) > 0);
-  const pick = dated.length
-    ? dated.reduce((a, b) => (Number(b.collecttime) > Number(a.collecttime) ? b : a))
-    : rows[rows.length - 1];
-  return toTrack(pick)?.album?.imageUrl || "";
+// its own clients draw a song's artwork instead. The first song is the one to
+// wear, which is one request for one song however long the list is.
+function firstArtwork(songs = []) {
+  return toTrack(songs.filter(Boolean)[0])?.album?.imageUrl || "";
 }
 
-async function newestCover(gid, count) {
-  const pagesize = 300;
-  let songs = [];
-  for (let begin = 0; begin < Math.min(count, 3000); begin += pagesize) {
-    const r = await request({
-      path: "/pubsongs/v2/get_other_list_file_nofilt",
-      params: {
-        area_code: 1, begin_idx: begin, plat: 1, type: 1, mode: 1,
-        personal_switch: 1, pagesize, global_collection_id: gid,
-      },
-    });
-    const page = r?.data?.songs || r?.data?.info || [];
-    songs = songs.concat(page);
-    if (page.length < pagesize) break;
-  }
-  return newestArtwork(songs);
+function firstCover(gid) {
+  return request({
+    path: "/pubsongs/v2/get_other_list_file_nofilt",
+    params: {
+      area_code: 1, begin_idx: 0, plat: 1, type: 1, mode: 1,
+      personal_switch: 1, pagesize: 1, global_collection_id: gid,
+    },
+  }).then((r) => firstArtwork(r?.data?.songs || r?.data?.info || []));
 }
 
 async function mapLimit(items, limit, fn) {
@@ -850,10 +833,11 @@ async function withCovers(rows, me) {
     const gid = String(p.global_collection_id || p.list_create_gid);
     const count = Number(p.count);
     const hit = cache[gid];
-    // 2 marks the entries picked by added time; earlier ones went by position.
-    if (hit && hit.v === 2 && hit.count === count && Date.now() - hit.at < 86400e3) return hit.url || "";
-    const url = await newestCover(gid, count);
-    if (url) fresh[gid] = { v: 2, count, url, at: Date.now() };
+    // 3 marks entries taken from the first song; earlier versions went by
+    // position and then by added time.
+    if (hit && hit.v === 3 && hit.count === count && Date.now() - hit.at < 86400e3) return hit.url || "";
+    const url = await firstCover(gid);
+    if (url) fresh[gid] = { v: 3, count, url, at: Date.now() };
     return url;
   });
   if (Object.keys(fresh).length) save("covers", { ...cache, ...fresh });
@@ -1662,7 +1646,7 @@ export async function playlist({ id }) {
     id: String(id),
     name: known.name || "",
     // Same fallback as the sidebar, and the whole list is already in hand here.
-    imageUrl: picture(known.pic) || newestArtwork(songs) || "",
+    imageUrl: picture(known.pic) || firstArtwork(songs) || "",
     description: known.intro || "",
     owner: known.list_create_username || "",
     trackCount: Number(known.count || songs.length),

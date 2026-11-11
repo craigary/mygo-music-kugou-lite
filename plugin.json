@@ -80,7 +80,7 @@
     },
     {
       "title": "Saved Albums",
-      "builtin": "savedAlbums"
+      "page": "albums"
     },
     {
       "title": "Recently Played",
