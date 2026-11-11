@@ -1,4 +1,4 @@
-// 酷狗音乐概念版 (Kugou Lite) plugin for MyGo Music.
+// Kugou Lite (酷狗音乐概念版) plugin for MyGo Music.
 // Protocol details follow MakcRe/KuGouMusicApi (MIT) with platform=lite,
 // and the daily VIP claim follows develop202/kgcheckin.
 
@@ -574,7 +574,7 @@ async function loadProfile() {
 }
 
 // ----------------------------------------------------- daily VIP claim ----
-// The Concept app gives away a day of VIP for listening, and a little more for
+// The Kugou Lite app gives away a day of VIP for listening, and a little more for
 // the day's ad. Both are one call each, so this doesn't post an ad report every
 // 31 seconds in the background. It's off until the listener turns on the
 // "Claim the daily free VIP" switch: without it, VIP songs play 60 seconds.
@@ -815,7 +815,7 @@ export async function signIn() {
     host.signInPrompt(key ? { qr: `https://h5.kugou.com/apps/loginQRCode/html/index.html?qrcode=${key}`, text } : { text });
   const hint = mode === "sms"
     ? tr("Fill in your phone number in this plugin's settings, and the code sent to it")
-    : tr("Scan with the Kugou Concept app, or choose Phone + SMS code in this plugin's settings");
+    : tr("Scan with the Kugou Lite app, or choose Phone + SMS code in this plugin's settings");
   show(hint);
   const started = Date.now();
   while (Date.now() - started < 290e3) {
@@ -1955,7 +1955,7 @@ export async function stream({ id, quality = "high" }) {
 
 export function stations() {
   return [
-    { id: "normal", name: tr("Private FM"), description: tr("Plays on, to your taste") },
+    { id: "normal", name: tr("Personal FM"), description: tr("Plays on, to your taste") },
     { id: "small", name: tr("Niche FM"), description: tr("Good songs few people know") },
   ];
 }
@@ -1975,10 +1975,10 @@ export async function stationNext({ id = "normal" }) {
   const r = await request({
     method: "POST", path: "/v2/personal_recommend", headers: { "x-router": "persnfm.service.kugou.com" }, data,
   });
-  must(r, tr("Private FM"));
+  must(r, tr("Personal FM"));
   const songs = r?.data?.song_list || r?.data?.songs || r?.data?.list || (Array.isArray(r?.data) ? r.data : []);
   const tracks = tracksOf(songs);
-  if (!tracks.length) throw fail("unavailable", tr("Private FM found nothing to play"));
+  if (!tracks.length) throw fail("unavailable", tr("Personal FM found nothing to play"));
   return tracks;
 }
 

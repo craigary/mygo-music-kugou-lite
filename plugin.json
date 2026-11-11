@@ -1,7 +1,7 @@
 {
   "id": "kugou-lite",
   "name": "Kugou Lite",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "minAppVersion": "0.1.24",
   "main": "index.js",
   "playback": "stream",
@@ -23,7 +23,7 @@
       "key": "signInMethod",
       "label": "Sign-in method",
       "type": "select",
-      "help": "The QR code works for every account. The other two read the fields below",
+      "help": "The QR code works for any account. The other two use the fields below",
       "options": [
         {
           "value": "",
@@ -47,7 +47,7 @@
     {
       "key": "smsCode",
       "label": "SMS code",
-      "help": "The code sent to your phone, to sign in with"
+      "help": "The code sent to your phone, typed here to sign in"
     },
     {
       "key": "password",
@@ -59,7 +59,7 @@
       "key": "claimVip",
       "label": "Claim the daily free VIP",
       "type": "boolean",
-      "help": "The Concept app gives a day of VIP to whoever claims it. Without it, VIP songs play 60 seconds"
+      "help": "The Kugou Lite app gives a day of VIP to whoever claims it. Without it, VIP songs play 60 seconds"
     }
   ],
   "navigation": [
@@ -67,7 +67,7 @@
       "builtin": "home"
     },
     {
-      "title": "Private FM",
+      "title": "Stations",
       "builtin": "stations"
     },
     {
