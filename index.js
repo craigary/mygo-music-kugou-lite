@@ -242,6 +242,8 @@ let listsCache = null;
 let albumsCache = null; // the saved albums, gathered from every page of lists
 let profileChecked = false; // the listener's name is looked up once a launch
 const names = new Map();
+// track id → { image, album }: what the song looked like, for played() below.
+const artworks = new Map();
 const commentPools = new Map(); // song id → comment pool id, for likes
 function resetSession() {
   state.epoch++;
@@ -249,6 +251,7 @@ function resetSession() {
   albumsCache = null;
   profileChecked = false;
   names.clear();
+  artworks.clear();
   commentPools.clear();
   for (const key of ["session", "profile", "vip", "vipInfo", "liked", "recent", "covers", "smsSent", "smsUsed"])
     host.storage.remove(key);
@@ -732,15 +735,19 @@ function toTrack(s) {
   const id = trackId(hash, mix, albumId);
   if (names.size > 5000) names.clear();
   names.set(id, `${artists.map((a) => a.name).join("、")} - ${name}`);
+  const albumName = s.AlbumName || s.album_name || s.albuminfo?.name || s.album_info?.album_name || s.remark || "";
+  const albumArt = picture(s.trans_param?.union_cover || s.album_info?.sizable_cover || s.album_info?.cover || s.cover || s.sizable_cover || s.Image || s.img);
+  // Kept for played(), which is handed nothing but an id later on: a song that
+  // came from a page we drew can be remembered with its artwork for free.
+  if (albumArt) {
+    if (artworks.size > 5000) artworks.clear();
+    artworks.set(id, { image: albumArt, album: albumName });
+  }
   return {
     id,
     name,
     artists,
-    album: {
-      id: String(albumId || ""),
-      name: s.AlbumName || s.album_name || s.albuminfo?.name || s.album_info?.album_name || s.remark || "",
-      imageUrl: picture(s.trans_param?.union_cover || s.album_info?.sizable_cover || s.album_info?.cover || s.cover || s.sizable_cover || s.Image || s.img),
-    },
+    album: { id: String(albumId || ""), name: albumName, imageUrl: albumArt },
     duration: Math.round(Number(duration) || 0),
     url: `https://www.kugou.com/song/#hash=${String(hash).toLowerCase()}&album_id=${albumId || 0}`,
     ...(privilege === 5 ? { unavailable: true } : {}),
@@ -2049,14 +2056,30 @@ export async function recent() {
 
 export async function played({ id }) {
   const generation = state.epoch;
+  const identity = parseId(id);
   let track = load("recent", []).find((t) => t.id === id);
   if (!track) {
-    const identity = parseId(id);
     const found = await audioDetail(identity.hash).catch(() => null);
     still(generation);
     if (!found) return;
     track = toTrack({ ...found, MixSongID: identity.mix, AlbumID: identity.album });
-    if (track) track.id = id;
+    if (!track) return;
+    track.id = id;
+  }
+  // The audio endpoint answers without an album, so the song is written down
+  // with the artwork it had on the page it was played from. A song that was
+  // never drawn here, such as one the app resumed by itself, costs one lookup —
+  // cheaper than a list that reads blank later, and it works offline once kept.
+  if (!track.album?.imageUrl) {
+    const seen = artworks.get(id);
+    if (seen) track.album = { ...track.album, name: track.album?.name || seen.album, imageUrl: seen.image };
+    else if (identity.album) {
+      const a = await albumDetail(identity.album).catch(() => null);
+      still(generation);
+      if (a?.sizable_cover) {
+        track.album = { ...track.album, name: track.album?.name || a.album_name || "", imageUrl: picture(a.sizable_cover) };
+      }
+    }
   }
   rememberTrack(track);
   // Tell Kugou too, so the phone app's history and this one agree.
@@ -2064,7 +2087,7 @@ export async function played({ id }) {
   if (me?.token) {
     request({
       method: "POST", path: "/playhistory/v1/upload_songs", params: { plat: 3 },
-      data: { songs: [{ mxid: parseId(id).mix, op: 1, ot: Math.floor(Date.now() / 1000), pc: 1 }], token: me.token, userid: Number(me.userid) },
+      data: { songs: [{ mxid: identity.mix, op: 1, ot: Math.floor(Date.now() / 1000), pc: 1 }], token: me.token, userid: Number(me.userid) },
     }).catch(() => {});
   }
 }
