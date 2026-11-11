@@ -626,21 +626,38 @@ async function claimDaily() {
   }
 }
 
+// Kugou stacks several packages on one account. busi_type can't tell them
+// apart — it names the app line and is "concept" on every row — so the tier is
+// product_type. Strongest first, which is also the order the app displays them.
+const VIP_TIERS = ["svip", "wvip", "tvip", "qvip", "dvip"];
+
+function vipEndAt(text) {
+  return text ? Date.parse(String(text).replace(" ", "T") + "+08:00") || 0 : 0;
+}
+
 async function vipInfo() {
-  const r = await request({ base: "https://kugouvip.kugou.com", path: "/v1/get_union_vip", params: { busi_type: "concept" } });
+  const r = await request({
+    base: "https://kugouvip.kugou.com",
+    path: "/v1/get_union_vip",
+    // The app asks for the side packages too; without them a weekly or daily
+    // pass is invisible and the account looks like it holds nothing.
+    params: { busi_type: "concept", opt_product_types: "dvip,qvip,wvip" },
+  });
   if (!ok(r)) return null;
   // data.is_vip speaks for the paid tiers (0 here even with days left), so the
-  // date of the running ones is what counts.
-  const ends = (r.data?.busi_vip || [])
-    .filter((b) => Number(b.is_vip) === 1)
-    .map((b) => String(b.vip_end_time || ""))
-    .filter(Boolean)
-    .sort();
-  const busi = (r.data?.busi_vip || []).filter((b) => Number(b.is_vip) === 1);
+  // dates of the rows that are actually running are what counts.
+  const rows = (r.data?.busi_vip || []).filter((b) => Number(b.is_vip) === 1 && b.vip_end_time);
+  const running = rows.filter((b) => vipEndAt(b.vip_end_time) > Date.now());
+  const pool = running.length ? running : rows;
+  const rank = (b) => {
+    const i = VIP_TIERS.indexOf(String(b.product_type || ""));
+    return i < 0 ? VIP_TIERS.length : i;
+  };
+  // Ties keep wire order, which runs strongest first anyway.
+  const best = pool.slice().sort((a, b) => rank(a) - rank(b))[0];
   const info = {
-    end: ends[ends.length - 1] || "",
-    // concept is the Concept Edition's own VIP; music is the listening pack.
-    kind: String(busi[0]?.busi_type || ""),
+    end: String(best?.vip_end_time || ""),
+    kind: String(best?.product_type || ""),
     checked: Date.now(),
   };
   save("vipInfo", info);
@@ -980,24 +997,33 @@ async function recommendedPlaylists(pagesize = 30) {
   }));
 }
 
-// Kugou groups VIPs by busi type: the Concept one, and the music pack.
+// Kugou names these by product_type: svip is the Edition's own VIP, tvip the
+// listening-only tier it hands out for watching an ad, wvip/qvip/dvip the short
+// passes. Rows saved by older builds carried busi_type instead, hence the tail.
 function vipKind(type) {
-  if (type === "concept") return tr("Concept VIP");
+  if (type === "svip" || type === "concept") return tr("Concept VIP");
+  if (type === "tvip") return tr("Listening VIP");
+  if (type === "wvip") return tr("Weekly pass");
+  if (type === "qvip") return tr("Q VIP");
+  if (type === "dvip") return tr("Daily pass");
   if (type === "music") return tr("Music pack");
   return String(type || "");
 }
 
+// One line for My Page and the daily picks header alike: what the listener
+// holds, whether today's free day is in, and when it runs out.
+function vipSummary(info) {
+  const st = vipState();
+  const live = info?.end && vipEndAt(info.end) > Date.now();
+  return [
+    live ? vipKind(info.kind) || tr("VIP") : tr("Not VIP"),
+    st.done ? tr("Checked in") : st.error ? tr("Check-in failed") : tr("Not checked in"),
+    live ? tr("{date} expires", { date: info.end }) : "",
+  ].filter(Boolean).join(" · ");
+}
+
 function vipLine() {
-  const st = load("vip", null);
-  const info = load("vipInfo", null);
-  const parts = [];
-  if (st?.date === today()) {
-    if (st.note === "claimed") parts.push(tr("Today's VIP claimed"));
-    else if (st.note === "already") parts.push(tr("Today's VIP was already claimed"));
-    else if (st.error) parts.push(tr("Claiming today's VIP failed: {message}", { message: st.error }));
-  }
-  if (info?.end) parts.push(tr("VIP until {date}", { date: info.end }));
-  return parts.join(" · ");
+  return vipSummary(load("vipInfo", null));
 }
 
 export async function home() {
@@ -1079,20 +1105,16 @@ async function myPage() {
     sections.push({ title: tr("Recently Played"), tracks: recentTracks.value, morePage: "recent" });
   }
   const vip = vipNow.status === "fulfilled" && vipNow.value ? vipNow.value : load("vipInfo", null);
-  // Kugou's is_vip is about its paid tiers; what the listener has is the date.
-  const endAt = vip?.end ? Date.parse(String(vip.end).replace(" ", "T") + "+08:00") : 0;
-  const stats = [
-    endAt > Date.now() ? vipKind(vip?.kind) || tr("VIP") : tr("Not VIP"),
-    vip?.end ? tr("VIP until {date}", { date: vip.end }) : "",
+  const stats = vipSummary(vip);
+  const reach = [
     profile?.follows ? tr("{count} following", { count: profile.follows }) : "",
     profile?.fans ? tr("{count} followers", { count: profile.fans }) : "",
   ].filter(Boolean).join(" · ");
-  const checkin = vipState().done ? tr("Today's VIP is claimed") : tr("Today's VIP is not claimed yet");
   return {
     title: profile?.nickname || load("profile", null)?.name || String(me.userid),
     subtitle: tr("My Page"),
     imageUrl: picture(profile?.pic) || load("profile", null)?.imageUrl,
-    description: [stats, checkin, profile?.descri].filter(Boolean).join("\n"),
+    description: [stats, reach, profile?.descri].filter(Boolean).join("\n"),
     sections,
   };
 }
