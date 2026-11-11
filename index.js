@@ -576,8 +576,8 @@ async function loadProfile() {
 // ----------------------------------------------------- daily VIP claim ----
 // The Concept app gives away a day of VIP for listening, and a little more for
 // the day's ad. Both are one call each, so this doesn't post an ad report every
-// 31 seconds in the background. It's on unless autoVip is "0" in settings.json:
-// MyGo's plugin settings are text fields, too clumsy a thing to turn off.
+// 31 seconds in the background. It's off until the listener turns on the
+// "Claim the daily free VIP" switch: without it, VIP songs play 60 seconds.
 
 let dailyRunning = false;
 const RETRY_AFTER = 10 * 60e3;
@@ -589,7 +589,7 @@ function vipState() {
 
 async function claimDaily() {
   if (dailyRunning || !session()) return;
-  if (String(host.setting("autoVip") ?? "").trim() === "0") return;
+  if (String(host.setting("claimVip") || "") !== "true") return;
   dailyRunning = true;
   try {
     const s = session();
@@ -763,34 +763,87 @@ function toPlaylist(p = {}, me) {
 
 // ------------------------------------------------------------- accounts ----
 
+// How the listener wants to sign in. An empty answer, and anything the app
+// doesn't know, is the QR code: every account can use it, and it is what
+// older versions of this plugin did without asking.
+function signInMode() {
+  const mode = String(host.setting("signInMethod") || "").trim();
+  return mode === "sms" || mode === "password" ? mode : "qr";
+}
+
+// Phone and password go in one call, with no code to wait for.
+async function passwordSignIn() {
+  const phone = (host.setting("phone") || "").trim();
+  const password = host.setting("password") || "";
+  if (!/^1\d{10}$/.test(phone)) throw fail("setup", tr("Fill in your phone number in the plugin's settings first"));
+  if (!password) throw fail("setup", tr("Fill in your password in the plugin's settings first"));
+  host.signInPrompt({ text: tr("Signing in with your phone number and password") });
+  const d = await ensureDfid();
+  const now = Date.now();
+  const e = aesEncrypt({ pwd: password, code: "", clienttime_ms: now });
+  const r = await request({
+    method: "POST", path: "/v9/login_by_pwd",
+    data: {
+      plat: 1, support_multi: 1, ...liteT1T2(now), t3: "MCwwLDAsMCwwLDAsMCwwLDA=",
+      clienttime_ms: now, username: phone, dev: d.dev,
+      pk: rsaRaw({ clienttime_ms: now, key: e.key }).toUpperCase(), params: e.str,
+    },
+    headers: {
+      "support-calm": "1", "x-router": "login.user.kugou.com",
+      "User-Agent": "Android16-1070-11440-130-0-LOGIN-wifi",
+    },
+    anonymous: true,
+  });
+  if (r?.status !== 1) must({ ...r, status: 0 }, tr("Signing in"));
+  return finishLogin(r.data, e.key);
+}
+
+// The SMS code is asked for once a minute at most: a refusal, such as too many
+// codes asked for, would otherwise be tried again on every turn of the loop.
+let smsAttempt = { at: 0, mobile: "" };
+
 export async function signIn() {
   resetSession();
   const generation = state.epoch;
+  const mode = signInMode();
+  if (mode === "password") return passwordSignIn();
   await ensureDfid().catch(() => {});
-  let key = await qrCreate();
-  const show = (text) => host.signInPrompt({ qr: `https://h5.kugou.com/apps/loginQRCode/html/index.html?qrcode=${key}`, text });
-  const hint = tr("Scan with the Kugou Concept app, or fill in your phone number in this plugin's settings to get a code by SMS");
+  // By SMS there is no code to show, so the window carries the instructions
+  // alone. Signing in by password has already returned above.
+  let key = mode === "sms" ? "" : await qrCreate();
+  const show = (text) =>
+    host.signInPrompt(key ? { qr: `https://h5.kugou.com/apps/loginQRCode/html/index.html?qrcode=${key}`, text } : { text });
+  const hint = mode === "sms"
+    ? tr("Fill in your phone number in this plugin's settings, and the code sent to it")
+    : tr("Scan with the Kugou Concept app, or choose Phone + SMS code in this plugin's settings");
   show(hint);
   const started = Date.now();
   while (Date.now() - started < 290e3) {
     if (generation !== state.epoch) throw new Error(tr("Sign-in cancelled"));
     if (session()) return account();
-    const phone = (host.setting("phone") || "").trim();
-    const code = (host.setting("smsCode") || "").trim();
-    if (/^1\d{10}$/.test(phone)) {
-      const sent = load("smsSent", null);
-      if (/^\d{4,6}$/.test(code) && load("smsUsed", "") !== `${phone}:${code}` && sent?.mobile === phone) {
-        return smsLogin(phone, code);
+    if (mode === "sms") {
+      const phone = (host.setting("phone") || "").trim();
+      const code = (host.setting("smsCode") || "").trim();
+      if (/^1\d{10}$/.test(phone)) {
+        const sent = load("smsSent", null);
+        if (/^\d{4,6}$/.test(code) && load("smsUsed", "") !== `${phone}:${code}` && sent?.mobile === phone) {
+          return smsLogin(phone, code);
+        }
+        if (!sent || sent.mobile !== phone || Date.now() - sent.at > 5 * 60e3) {
+          if (smsAttempt.mobile !== phone || Date.now() - smsAttempt.at > 60e3) {
+            smsAttempt = { at: Date.now(), mobile: phone };
+            await sendSmsCode(phone)
+              .then(() => show(tr("Code sent by SMS. Fill it in this plugin's settings")))
+              .catch((e) => show(e.message));
+          }
+        }
       }
-      if (!sent || sent.mobile !== phone || Date.now() - sent.at > 5 * 60e3) {
-        await sendSmsCode(phone).catch((e) => show(e.message));
-        show(tr("Code sent by SMS. Fill it in this plugin's settings, or scan the QR code"));
-      }
+    } else {
+      const st = await qrCheck(key).catch(() => ({}));
+      if (st.status === 4 && st.token) return finishLogin({ token: st.token, userid: st.userid });
+      if (st.status === 2) show(tr("Scanned. Confirm on your phone"));
+      if (st.status === 0) { key = await qrCreate(); show(hint); }
     }
-    const st = await qrCheck(key).catch(() => ({}));
-    if (st.status === 4 && st.token) return finishLogin({ token: st.token, userid: st.userid });
-    if (st.status === 2) show(tr("Scanned. Confirm on your phone"));
-    if (st.status === 0) { key = await qrCreate(); show(hint); }
     await sleep(2000);
   }
   throw new Error(tr("Sign-in timed out"));
@@ -806,7 +859,7 @@ export async function account() {
     // A code filled in the settings while the plugin wasn't listening.
     const phone = (host.setting("phone") || "").trim(), code = (host.setting("smsCode") || "").trim();
     const sent = load("smsSent", null);
-    if (/^1\d{10}$/.test(phone) && /^\d{4,6}$/.test(code) && sent?.mobile === phone && Date.now() - sent.at < 10 * 60e3 && load("smsUsed", "") !== `${phone}:${code}`) {
+    if (signInMode() === "sms" && /^1\d{10}$/.test(phone) && /^\d{4,6}$/.test(code) && sent?.mobile === phone && Date.now() - sent.at < 10 * 60e3 && load("smsUsed", "") !== `${phone}:${code}`) {
       try { await smsLogin(phone, code); } catch { /* shown when they sign in */ }
       s = session();
     }

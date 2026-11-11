@@ -1,8 +1,8 @@
 {
   "id": "kugou-lite",
   "name": "Kugou Lite",
-  "version": "0.6.2",
-  "minAppVersion": "0.1.20",
+  "version": "0.7.0",
+  "minAppVersion": "0.1.24",
   "main": "index.js",
   "playback": "stream",
   "permissions": {
@@ -20,14 +20,46 @@
   },
   "settings": [
     {
+      "key": "signInMethod",
+      "label": "Sign-in method",
+      "type": "select",
+      "help": "The QR code works for every account. The other two read the fields below",
+      "options": [
+        {
+          "value": "",
+          "label": "QR code (default)"
+        },
+        {
+          "value": "sms",
+          "label": "Phone + SMS code"
+        },
+        {
+          "value": "password",
+          "label": "Phone + password"
+        }
+      ]
+    },
+    {
       "key": "phone",
       "label": "Phone number",
-      "help": "For signing in by SMS: fill in your phone number and a code is sent to it"
+      "help": "For signing in by SMS or by password"
     },
     {
       "key": "smsCode",
       "label": "SMS code",
-      "help": "Fill in the code you received to sign in"
+      "help": "The code sent to your phone, to sign in with"
+    },
+    {
+      "key": "password",
+      "label": "Password",
+      "type": "password",
+      "help": "Only for Phone + password. It is kept as plain text in this plugin's data: delete it once you are signed in"
+    },
+    {
+      "key": "claimVip",
+      "label": "Claim the daily free VIP",
+      "type": "boolean",
+      "help": "The Concept app gives a day of VIP to whoever claims it. Without it, VIP songs play 60 seconds"
     }
   ],
   "navigation": [

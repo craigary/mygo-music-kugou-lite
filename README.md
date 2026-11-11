@@ -10,11 +10,11 @@
 https://github.com/craigary/mygo-music-kugou-lite
 ```
 
-也可以直接选这个文件夹，或用它的 zip。需要 MyGo Music **0.1.20** 或更新（见 [`plugin.json`](plugin.json) 的 `minAppVersion`）。
+也可以直接选这个文件夹，或用它的 zip。需要 MyGo Music **0.1.24** 或更新（见 [`plugin.json`](plugin.json) 的 `minAppVersion`）。
 
 ## 功能
 
-- **登录**：用酷狗概念版 App 扫码；也可以在插件设置里填手机号，收短信验证码登录。
+- **登录**：三种方式，在设置里选——扫码（默认）、手机号 + 短信验证码、手机号 + 密码。
 - **浏览**：首页有每日推荐、推荐歌单、酷狗 TOP500、新歌和排行榜；搜索覆盖歌曲、专辑、歌手、歌单。
 - **排行榜**：按歌单页展示，一次给全 500 首，不是一页 100 首往下翻。
 - **歌手**：热门歌曲加全部专辑，可以关注 / 取消关注。
@@ -26,12 +26,12 @@ https://github.com/craigary/mygo-music-kugou-lite
 - **歌单**：新建、改名、删除、加歌、移歌、调序；可以收藏别人的歌单，也可以取消收藏。
 - **电台**：私人 FM 和小众 FM。
 - **最近播放**：本地记录加酷狗听歌历史，播放时同步上报，手机 App 里能看到同一条。
-- **每日 VIP**：打开 MyGo 时自动领取概念版每天的免费 VIP，结果显示在首页副标题。
+- **每日 VIP**：设置里打开「领取每日免费 VIP」后，每次打开 MyGo 自动领当天那份，结果显示在首页副标题。默认关闭；不领的话 VIP 歌曲只能听 60 秒。
 - **语言**：跟随 MyGo Music 的简体中文 / English 设置。
 
 ## 说明
 
-未登录只能播免费歌曲的试听片段，歌单和红心也需要登录。不支持评论回复、播客和 MV。登录凭证以明文存在 MyGo 的插件数据目录里。
+未登录只能播免费歌曲的试听片段，歌单和红心也需要登录。不支持评论回复、播客和 MV。登录凭证以明文存在 MyGo 的插件数据目录里；用密码登录的话，密码也会明文留在设置里，登录后建议清空。
 
 非官方插件，用的是非公开接口，酷狗改了就可能失效。接口与签名参考 [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi)（MIT），评论点赞的 mlike 接口参考 [SoundFieldLab/WaveForge](https://github.com/SoundFieldLab/WaveForge)（MIT）的实测；逐字歌词解压用 [tiny-inflate](https://github.com/foliojs/tiny-inflate)（MIT，已内联）。
 
