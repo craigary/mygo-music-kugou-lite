@@ -1187,7 +1187,6 @@ export async function browse({ page }) {
     const tracks = await dailyRecommend();
     return {
       title: tr("Daily picks"),
-      subtitle: vipLine(),
       description: tr("{count} songs picked for you", { count: tracks.length }),
       sections: [{ tracks, empty: tr("No songs") }],
     };
@@ -1985,11 +1984,63 @@ async function remoteRecent(limit) {
     .slice(0, limit);
 }
 
+// Artwork for a handful of albums in one call, for rows that came back without
+// it. The song detail endpoint the player path uses carries no album at all —
+// only the audio — so a song remembered from a bare play has no cover to show.
+async function albumCovers(ids) {
+  const wanted = [...new Set(ids.map(String).filter(Boolean))].slice(0, 20);
+  if (!wanted.length) return new Map();
+  const r = await request({
+    method: "POST", path: "/kmr/v2/albums",
+    headers: { "x-router": "openapi.kugou.com", "kg-tid": "255" },
+    data: { data: wanted.map((id) => ({ album_id: id })), is_buy: 0, fields: "album_id,album_name,sizable_cover" },
+  });
+  const out = new Map();
+  for (const a of r?.data || []) {
+    const id = String(a.album_id ?? a.albumid ?? "");
+    if (id && a.sizable_cover) out.set(id, { image: picture(a.sizable_cover), name: a.album_name || "" });
+  }
+  return out;
+}
+
 async function recentTracksOf(limit) {
   const local = load("recent", []).slice(0, limit);
   const remote = await remoteRecent(limit).catch(() => []);
-  const all = [...local, ...remote];
-  return all.filter((t, i) => all.findIndex((x) => x.id === t.id) === i).slice(0, limit);
+  // The history service still knows the album the player path forgot, so a
+  // remembered row takes it from the same song there.
+  const known = new Map(remote.map((t) => [t.id, t]));
+  const filled = local.map((t) => {
+    if (t.album?.imageUrl) return t;
+    const from = known.get(t.id)?.album;
+    if (!from?.imageUrl) return t;
+    return { ...t, album: { ...t.album, name: t.album?.name || from.name || "", imageUrl: from.imageUrl } };
+  });
+  const seen = new Set();
+  const all = [...filled, ...remote].filter((t) => {
+    if (!t?.id || seen.has(t.id)) return false;
+    seen.add(t.id);
+    return true;
+  });
+  const bare = all.filter((t) => !t.album?.imageUrl && t.album?.id);
+  if (!bare.length) return all.slice(0, limit);
+  // One call for every album still missing, then the answer is kept, so the
+  // next visit asks nothing.
+  const covers = await albumCovers(bare.map((t) => t.album.id)).catch(() => new Map());
+  if (!covers.size) return all.slice(0, limit);
+  for (const t of all) {
+    const found = covers.get(String(t.album?.id ?? ""));
+    if (found && !t.album.imageUrl) t.album = { ...t.album, name: t.album.name || found.name, imageUrl: found.image };
+  }
+  const stored = load("recent", []);
+  let changed = false;
+  const next = stored.map((t) => {
+    const found = covers.get(String(t.album?.id ?? ""));
+    if (!found || t.album?.imageUrl) return t;
+    changed = true;
+    return { ...t, album: { ...t.album, name: t.album?.name || found.name, imageUrl: found.image } };
+  });
+  if (changed) save("recent", next);
+  return all.slice(0, limit);
 }
 
 export async function recent() {

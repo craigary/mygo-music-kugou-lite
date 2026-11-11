@@ -80,7 +80,8 @@
     },
     {
       "title": "Saved Albums",
-      "page": "albums"
+      "page": "albums",
+      "icon": "album"
     },
     {
       "title": "Recently Played",
