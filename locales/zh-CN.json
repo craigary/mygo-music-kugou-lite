@@ -27,12 +27,10 @@
   "Daily picks": "每日推荐",
   "Kugou TOP500": "酷狗 TOP500",
   "New songs": "新歌榜",
-  "Sign in to claim free VIP every day": "登录后每天自动领取免费 VIP",
   "My Playlists": "我的歌单",
   "No playlists yet": "还没有歌单",
   "Recently Played": "最近播放",
   "VIP": "VIP",
-  "Free account": "普通用户",
   "{count} following": "关注 {count}",
   "{count} followers": "粉丝 {count}",
   "My Page": "我的主页",
@@ -115,8 +113,6 @@
   "Personal FM found nothing to play": "私人 FM 这次没挑出歌",
   "Only for Phone + password. It is kept as plain text in this plugin's data": "只用于「手机号 + 密码」。会以明文存在插件数据里。",
   "Today's VIP is claimed": "今天的 VIP 已领取",
-  "Check in for today's VIP": "领取今日免费 VIP",
-  "One day of VIP, once a day": "每天可以领一天",
-  "Daily VIP": "每日 VIP",
-  "Sign in to claim the daily VIP": "登录后才能领每日 VIP"
+  "Not VIP": "非 VIP",
+  "Today's VIP is not claimed yet": "今日尚未签到"
 }
