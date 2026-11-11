@@ -250,7 +250,7 @@ function resetSession() {
   profileChecked = false;
   names.clear();
   commentPools.clear();
-  for (const key of ["session", "profile", "vip", "vipInfo", "liked", "recent", "smsSent", "smsUsed"])
+  for (const key of ["session", "profile", "vip", "vipInfo", "liked", "recent", "covers", "smsSent", "smsUsed"])
     host.storage.remove(key);
 }
 // What a request started for an account that has since changed must not write.
@@ -776,7 +776,7 @@ function toSavedAlbum(p = {}) {
   };
 }
 
-function toPlaylist(p = {}, me) {
+function toPlaylist(p = {}, me, cover) {
   const mine = !!me && Number(p.list_create_userid) === Number(me.userid);
   return {
     // A saved list is a copy under our own id: the list it came from is the one
@@ -784,7 +784,7 @@ function toPlaylist(p = {}, me) {
     // same playlist.
     id: String(p.list_create_gid || p.global_collection_id || p.listid || ""),
     name: p.name || "",
-    imageUrl: picture(p.pic),
+    imageUrl: picture(p.pic) || cover,
     description: p.intro || "",
     owner: p.list_create_username || "",
     trackCount: Number(p.count || p.song_count || 0),
@@ -792,6 +792,53 @@ function toPlaylist(p = {}, me) {
     fixed: !!isLikedList(p),
     saved: !mine,
   };
+}
+
+// A list we made ourselves has no cover of its own — Kugou leaves pic empty and
+// its own clients draw the newest song's artwork instead. Ask for that one song
+// at the end of the list (Kugou stores lists oldest first) rather than the whole
+// thing. Cached per list and per song count, so an unchanged list costs nothing
+// the next time a page opens.
+function newestCover(gid, count) {
+  return request({
+    path: "/pubsongs/v2/get_other_list_file_nofilt",
+    params: {
+      area_code: 1, begin_idx: Math.max(count - 1, 0), plat: 1, type: 1, mode: 1,
+      personal_switch: 1, pagesize: 1, global_collection_id: gid,
+    },
+  }).then((r) => toTrack((r?.data?.songs || r?.data?.info || [])[0])?.album?.imageUrl || "");
+}
+
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]).catch(() => "");
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+async function withCovers(rows, me) {
+  const bare = rows.filter((p) => !picture(p.pic) && Number(p.count) > 0 && (p.global_collection_id || p.list_create_gid));
+  if (!bare.length) return rows.map((p) => toPlaylist(p, me));
+  const cache = load("covers", {}) || {};
+  const fresh = {};
+  const urls = await mapLimit(bare, 4, async (p) => {
+    const gid = String(p.global_collection_id || p.list_create_gid);
+    const count = Number(p.count);
+    const hit = cache[gid];
+    if (hit && hit.count === count && Date.now() - hit.at < 86400e3) return hit.url || "";
+    const url = await newestCover(gid, count);
+    if (url) fresh[gid] = { count, url, at: Date.now() };
+    return url;
+  });
+  if (Object.keys(fresh).length) save("covers", { ...cache, ...fresh });
+  const found = new Map(bare.map((p, i) => [p, urls[i]]));
+  return rows.map((p) => toPlaylist(p, me, found.get(p) || ""));
 }
 
 // ------------------------------------------------------------- accounts ----
@@ -1091,7 +1138,7 @@ async function myPage() {
     sections.push({
       title: tr("My Playlists"),
       // Saved albums live in their own page, not among the playlists.
-      playlists: lists.value.filter((p) => !isAlbumRow(p)).map((p) => toPlaylist(p, me)),
+      playlists: await withCovers(lists.value.filter((p) => !isAlbumRow(p)), me),
       empty: tr("No playlists yet"),
     });
   } else {
@@ -1553,7 +1600,7 @@ async function listTracks(gid, max = 3000) {
 
 export async function playlists() {
   const me = needSession();
-  return (await myLists()).filter((p) => !isAlbumRow(p)).map((p) => toPlaylist(p, me));
+  return withCovers((await myLists()).filter((p) => !isAlbumRow(p)), me);
 }
 
 export async function playlist({ id }) {
@@ -1590,17 +1637,20 @@ export async function playlist({ id }) {
   const known = Object.keys(info).length ? info : entry || {};
   const mine = entry ? isMine(entry, me) : !!ownList(id, me);
   const saved = !!entry && !mine;
+  const tracks = tracksOf(songs);
   return {
     id: String(id),
     name: known.name || "",
-    imageUrl: picture(known.pic),
+    // Same fallback as the sidebar: a list with no artwork of its own wears its
+    // newest song's, and those songs are already in hand here.
+    imageUrl: picture(known.pic) || tracks[tracks.length - 1]?.album?.imageUrl || "",
     description: known.intro || "",
     owner: known.list_create_username || "",
     trackCount: Number(known.count || songs.length),
     mine,
     fixed: !!isLikedList(known),
     saved,
-    tracks: tracksOf(songs),
+    tracks,
   };
 }
 
